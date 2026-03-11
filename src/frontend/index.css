@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: 'Figtree';
+  src: url('/assets/fonts/Figtree.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Bricolage Grotesque';
+  src: url('/assets/fonts/BricolageGrotesque.woff2') format('woff2');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@layer base {
+  :root {
+    --radius: 0.875rem;
+
+    /* Crisp warm-white background */
+    --background: 0.975 0.006 95;
+    --foreground: 0.16 0.025 255;
+
+    --card: 1 0 0;
+    --card-foreground: 0.16 0.025 255;
+    --popover: 1 0 0;
+    --popover-foreground: 0.16 0.025 255;
+
+    /* Vivid teal primary — slightly more saturated for punch */
+    --primary: 0.52 0.155 188;
+    --primary-foreground: 0.99 0 0;
+
+    --secondary: 0.94 0.018 192;
+    --secondary-foreground: 0.28 0.06 188;
+
+    --muted: 0.935 0.012 195;
+    --muted-foreground: 0.48 0.03 210;
+
+    --accent: 0.9 0.05 188;
+    --accent-foreground: 0.25 0.1 188;
+
+    --destructive: 0.577 0.245 27;
+    --destructive-foreground: 0.99 0 0;
+
+    --border: 0.89 0.012 200;
+    --input: 0.87 0.012 200;
+    --ring: 0.52 0.155 188;
+
+    --chart-1: 0.646 0.222 188;
+    --chart-2: 0.6 0.118 140;
+    --chart-3: 0.5 0.1 250;
+    --chart-4: 0.7 0.15 55;
+    --chart-5: 0.65 0.18 27;
+
+    --sidebar: 0.96 0.01 195;
+    --sidebar-foreground: 0.16 0.025 255;
+    --sidebar-primary: 0.52 0.155 188;
+    --sidebar-primary-foreground: 0.99 0 0;
+    --sidebar-accent: 0.9 0.05 188;
+    --sidebar-accent-foreground: 0.25 0.1 188;
+    --sidebar-border: 0.89 0.012 200;
+    --sidebar-ring: 0.52 0.155 188;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body antialiased;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display;
+  }
+}
+
+@layer utilities {
+  .touch-none {
+    touch-action: none;
+  }
+  .user-select-none {
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  /* Safe area padding for notched phones */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

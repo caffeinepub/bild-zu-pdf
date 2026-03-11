@@ -1,0 +1,17 @@
+{
+  "name": "Bild zu PDF",
+  "short_name": "Bild zu PDF",
+  "description": "Bilder in PDF-Dokumente umwandeln – direkt im Browser",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5faf9",
+  "theme_color": "#1a9e8e",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/assets/generated/empty-state-doc.dim_200x200.png",
+      "sizes": "200x200",
+      "type": "image/png"
+    }
+  ]
+}
