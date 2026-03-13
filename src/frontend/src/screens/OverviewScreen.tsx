@@ -30,9 +30,9 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import jsPDF from "jspdf";
 import {
   AlertCircle,
+  ArrowLeft,
   Camera,
   Download,
   FileText,
@@ -42,18 +42,21 @@ import {
   Share2,
   Trash2,
 } from "lucide-react";
+import { PDFDocument } from "pdf-lib";
 import { useRef, useState } from "react";
 import { toast } from "sonner";
 import type { PageItem } from "../App";
 
 const MAX_PAGES = 100;
-const A4_WIDTH_MM = 210;
-const A4_HEIGHT_MM = 297;
+// A4 in points (72 DPI): 595.28 x 841.89
+const A4_W = 595.28;
+const A4_H = 841.89;
 
 interface Props {
   pages: PageItem[];
   setPages: React.Dispatch<React.SetStateAction<PageItem[]>>;
   onImageSelected: (dataUrl: string) => void;
+  onBack: () => void;
 }
 
 function SortablePage({
@@ -115,28 +118,40 @@ function SortablePage({
         data-ocid={`page.delete_button.${index + 1}`}
         onClick={onDelete}
         className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/6 transition-colors"
-        aria-label={`Seite ${index + 1} löschen`}
+        aria-label={`Seite ${index + 1} l\u00f6schen`}
       >
         <Trash2 className="w-3.5 h-3.5" />
-        Löschen
+        L\u00f6schen
       </button>
     </div>
   );
 }
 
-/** Resolve natural image dimensions from a data URL without a full canvas round-trip */
+function dataUrlToBytes(dataUrl: string): Uint8Array {
+  const base64 = dataUrl.split(",")[1];
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+
 function getImageDimensions(
   dataUrl: string,
 ): Promise<{ w: number; h: number }> {
   return new Promise((resolve) => {
     const img = new Image();
     img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
-    img.onerror = () => resolve({ w: 2480, h: 3508 }); // fallback: A4 at 300dpi
+    img.onerror = () => resolve({ w: 2480, h: 3508 });
     img.src = dataUrl;
   });
 }
 
-export function OverviewScreen({ pages, setPages, onImageSelected }: Props) {
+export function OverviewScreen({
+  pages,
+  setPages,
+  onImageSelected,
+  onBack,
+}: Props) {
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
   const [showAddSheet, setShowAddSheet] = useState(false);
@@ -191,54 +206,60 @@ export function OverviewScreen({ pages, setPages, onImageSelected }: Props) {
 
   const deletePage = (id: string) => {
     setPages((prev) => prev.filter((p) => p.id !== id));
-    toast.success("Seite gelöscht");
+    toast.success("Seite gel\u00f6scht");
   };
 
   const generatePdf = async (download: boolean, share: boolean) => {
     if (pages.length === 0) return;
     setIsGenerating(true);
     try {
-      const pdf = new jsPDF({
-        unit: "mm",
-        format: "a4",
-        orientation: "portrait",
-        // Higher internal DPI for sharper output
-        putOnlyUsedFonts: true,
-        compress: false,
-      });
+      const pdfDoc = await PDFDocument.create();
 
-      for (let i = 0; i < pages.length; i++) {
-        if (i > 0) pdf.addPage();
+      for (const pageItem of pages) {
+        const imgDataUrl = pageItem.imageDataUrl;
+        const isJpeg =
+          imgDataUrl.startsWith("data:image/jpeg") ||
+          imgDataUrl.startsWith("data:image/jpg");
+        const imgBytes = dataUrlToBytes(imgDataUrl);
+        const embeddedImg = isJpeg
+          ? await pdfDoc.embedJpg(imgBytes)
+          : await pdfDoc.embedPng(imgBytes);
 
-        const imgDataUrl = pages[i].imageDataUrl;
         const { w: imgW, h: imgH } = await getImageDimensions(imgDataUrl);
-
         const aspectRatio = imgW / imgH;
-        let w = A4_WIDTH_MM;
-        let h = w / aspectRatio;
-        if (h > A4_HEIGHT_MM) {
-          h = A4_HEIGHT_MM;
-          w = h * aspectRatio;
-        }
-        const x = (A4_WIDTH_MM - w) / 2;
-        const y = (A4_HEIGHT_MM - h) / 2;
 
-        // Use the data URL directly — avoids an extra decode/encode cycle
-        // JPEG format, SLOW compression = best quality in jsPDF
-        pdf.addImage(imgDataUrl, "JPEG", x, y, w, h, undefined, "SLOW");
+        let drawW = A4_W;
+        let drawH = drawW / aspectRatio;
+        if (drawH > A4_H) {
+          drawH = A4_H;
+          drawW = drawH * aspectRatio;
+        }
+        const x = (A4_W - drawW) / 2;
+        const y = (A4_H - drawH) / 2;
+
+        const pdfPage = pdfDoc.addPage([A4_W, A4_H]);
+        pdfPage.drawImage(embeddedImg, { x, y, width: drawW, height: drawH });
       }
 
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes.buffer as ArrayBuffer], {
+        type: "application/pdf",
+      });
       const safeFilename = `${filename.trim() || "Dokument"}.pdf`;
 
       if (share && canShare) {
-        const blob = pdf.output("blob");
         const file = new File([blob], safeFilename, {
           type: "application/pdf",
         });
         await navigator.share({ files: [file], title: safeFilename });
         toast.success("PDF wird geteilt");
       } else if (download) {
-        pdf.save(safeFilename);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = safeFilename;
+        a.click();
+        URL.revokeObjectURL(url);
         toast.success("PDF gespeichert");
       }
     } catch (err) {
@@ -255,6 +276,15 @@ export function OverviewScreen({ pages, setPages, onImageSelected }: Props) {
       <header className="sticky top-0 z-20 bg-background/95 backdrop-blur-md border-b border-border">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              data-ocid="overview.back_button"
+              onClick={onBack}
+              className="w-9 h-9 rounded-xl flex items-center justify-center hover:bg-accent transition-colors -ml-1"
+              aria-label="Zur\u00fcck"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
             <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shadow-sm">
               <FileText className="w-4 h-4 text-primary-foreground" />
             </div>
@@ -304,7 +334,7 @@ export function OverviewScreen({ pages, setPages, onImageSelected }: Props) {
               Noch keine Seiten
             </h2>
             <p className="text-base text-muted-foreground mb-8 max-w-[260px] leading-relaxed">
-              Füge dein erstes Foto hinzu und erstelle ein PDF in Sekunden.
+              F\u00fcge dein erstes Foto hinzu und erstelle ein PDF in Sekunden.
             </p>
 
             <Button
@@ -316,7 +346,7 @@ export function OverviewScreen({ pages, setPages, onImageSelected }: Props) {
               <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
                 <Plus className="w-4 h-4" />
               </div>
-              Seite hinzufügen
+              Seite hinzuf\u00fcgen
             </Button>
 
             <div className="mt-6 flex items-center gap-4 text-xs text-muted-foreground">
@@ -379,7 +409,7 @@ export function OverviewScreen({ pages, setPages, onImageSelected }: Props) {
                   className="w-full gap-2 rounded-2xl h-14 border-dashed border-2 text-muted-foreground hover:text-primary hover:border-primary hover:bg-primary/5 transition-all"
                 >
                   <Plus className="w-5 h-5" />
-                  <span className="font-semibold">Seite hinzufügen</span>
+                  <span className="font-semibold">Seite hinzuf\u00fcgen</span>
                 </Button>
               </div>
             )}
@@ -389,7 +419,7 @@ export function OverviewScreen({ pages, setPages, onImageSelected }: Props) {
 
       {/* Footer */}
       <footer className="text-center text-xs text-muted-foreground py-4 border-t border-border safe-bottom">
-        © {new Date().getFullYear()}. Erstellt mit{" "}
+        \u00a9 {new Date().getFullYear()}. Erstellt mit{" "}
         <a
           href={`https://caffeine.ai?utm_source=caffeine-footer&utm_medium=referral&utm_content=${encodeURIComponent(window.location.hostname)}`}
           target="_blank"
@@ -422,7 +452,7 @@ export function OverviewScreen({ pages, setPages, onImageSelected }: Props) {
         <SheetContent side="bottom" className="rounded-t-3xl pb-10 safe-bottom">
           <SheetHeader className="mb-5">
             <SheetTitle className="font-display text-xl">
-              Bild hinzufügen
+              Bild hinzuf\u00fcgen
             </SheetTitle>
           </SheetHeader>
           <div className="flex gap-3">
@@ -484,7 +514,7 @@ export function OverviewScreen({ pages, setPages, onImageSelected }: Props) {
                 {pages.length} Seite{pages.length !== 1 ? "n" : ""}
               </span>
               <span className="inline-flex items-center gap-1 bg-muted text-muted-foreground text-xs font-medium px-2 py-0.5 rounded-full">
-                DIN A4 · 300 DPI
+                DIN A4 \u00b7 300 DPI
               </span>
             </div>
           </div>
@@ -496,7 +526,7 @@ export function OverviewScreen({ pages, setPages, onImageSelected }: Props) {
               className="w-full gap-2 rounded-xl h-12 font-semibold"
             >
               <Download className="w-4 h-4" />
-              {isGenerating ? "Wird erstellt…" : "Herunterladen"}
+              {isGenerating ? "Wird erstellt\u2026" : "Herunterladen"}
             </Button>
             {canShare && (
               <Button

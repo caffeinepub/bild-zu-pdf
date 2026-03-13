@@ -2,7 +2,10 @@ import { Toaster } from "@/components/ui/sonner";
 import { useState } from "react";
 import { CropScreen } from "./screens/CropScreen";
 import { FilterScreen } from "./screens/FilterScreen";
+import { HomeScreen } from "./screens/HomeScreen";
 import { OverviewScreen } from "./screens/OverviewScreen";
+import { PdfMergeScreen } from "./screens/PdfMergeScreen";
+import { PdfSplitScreen } from "./screens/PdfSplitScreen";
 
 export interface PageItem {
   id: string;
@@ -11,12 +14,15 @@ export interface PageItem {
 }
 
 export type Screen =
+  | { name: "home" }
   | { name: "overview" }
   | { name: "crop"; imageDataUrl: string }
-  | { name: "filter"; imageDataUrl: string };
+  | { name: "filter"; imageDataUrl: string }
+  | { name: "pdfSplit" }
+  | { name: "pdfMerge" };
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>({ name: "overview" });
+  const [screen, setScreen] = useState<Screen>({ name: "home" });
   const [pages, setPages] = useState<PageItem[]>([]);
 
   const handleImageSelected = (dataUrl: string) => {
@@ -47,11 +53,17 @@ export default function App() {
 
   return (
     <>
+      {screen.name === "home" && (
+        <HomeScreen
+          onSelectMode={(mode) => setScreen({ name: mode } as Screen)}
+        />
+      )}
       {screen.name === "overview" && (
         <OverviewScreen
           pages={pages}
           setPages={setPages}
           onImageSelected={handleImageSelected}
+          onBack={() => setScreen({ name: "home" })}
         />
       )}
       {screen.name === "crop" && (
@@ -67,6 +79,12 @@ export default function App() {
           onDone={handleFilterDone}
           onBack={handleFilterBack}
         />
+      )}
+      {screen.name === "pdfSplit" && (
+        <PdfSplitScreen onBack={() => setScreen({ name: "home" })} />
+      )}
+      {screen.name === "pdfMerge" && (
+        <PdfMergeScreen onBack={() => setScreen({ name: "home" })} />
       )}
       <Toaster position="top-center" />
     </>
